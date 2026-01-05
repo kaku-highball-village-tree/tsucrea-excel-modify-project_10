@@ -279,11 +279,13 @@ def recalculate_operating_profit(
     objRows: List[List[str]],
     iGrossProfitColumnIndex: int,
     iOperatingProfitColumnIndex: int,
+    objExcludeColumns: Optional[List[int]] = None,
 ) -> None:
     if iGrossProfitColumnIndex < 0 or iOperatingProfitColumnIndex < 0:
         return
     if iOperatingProfitColumnIndex <= iGrossProfitColumnIndex:
         return
+    objExcludeSet = set(objExcludeColumns or [])
 
     for iRowIndex in range(1, len(objRows)):
         objRow: List[str] = objRows[iRowIndex]
@@ -293,6 +295,8 @@ def recalculate_operating_profit(
         fGrossProfit: float = parse_number(objRow[iGrossProfitColumnIndex])
         fDeductionSum: float = 0.0
         for iColumnIndex in range(iGrossProfitColumnIndex + 1, iOperatingProfitColumnIndex):
+            if iColumnIndex in objExcludeSet:
+                continue
             if iColumnIndex >= len(objRow):
                 continue
             fDeductionSum += parse_number(objRow[iColumnIndex])
@@ -436,14 +440,164 @@ def recalculate_net_profit(
         objRows[iRowIndex] = objRow
 
 
+def allocate_company_sg_admin_cost(objRows: List[List[str]]) -> List[List[str]]:
+    if not objRows:
+        return objRows
+
+    objHeader: List[str] = objRows[0]
+    objCompanyColumns: List[str] = [
+        "1Cカンパニー販管費",
+        "2Cカンパニー販管費",
+        "3Cカンパニー販管費",
+        "4Cカンパニー販管費",
+        "事業開発カンパニー販管費",
+    ]
+    objCompanyManhourColumns: List[str] = [
+        "1Cカンパニー販管費の工数",
+        "2Cカンパニー販管費の工数",
+        "3Cカンパニー販管費の工数",
+        "4Cカンパニー販管費の工数",
+        "事業開発カンパニー販管費の工数",
+    ]
+    objCompanyRows: List[str] = [
+        "C001_1Cカンパニー販管費",
+        "C002_2Cカンパニー販管費",
+        "C003_3Cカンパニー販管費",
+        "C004_4Cカンパニー販管費",
+        "C005_事業開発カンパニー販管費",
+    ]
+
+    objCompanyIndices: List[int] = [find_column_index(objHeader, pszName) for pszName in objCompanyColumns]
+    objManhourIndices: List[int] = [find_column_index(objHeader, pszName) for pszName in objCompanyManhourColumns]
+
+    objCompanyTotals: List[float] = [0.0] * len(objCompanyColumns)
+    for iRowIndex, objRow in enumerate(objRows):
+        if iRowIndex == 0:
+            continue
+        pszRowName: str = objRow[0] if objRow else ""
+        if pszRowName in objCompanyRows:
+            iCompany: int = objCompanyRows.index(pszRowName)
+            iCompanyColumn: int = objCompanyIndices[iCompany]
+            if 0 <= iCompanyColumn < len(objRow):
+                objCompanyTotals[iCompany] = parse_number(objRow[iCompanyColumn])
+
+    # zero initialize all company cost columns
+    objOutputRows: List[List[str]] = []
+    for iRowIndex, objRow in enumerate(objRows):
+        objNewRow: List[str] = list(objRow)
+        if iRowIndex > 0:
+            for iCompanyColumn in objCompanyIndices:
+                if iCompanyColumn >= 0:
+                    if len(objNewRow) <= iCompanyColumn:
+                        objNewRow.extend([""] * (iCompanyColumn + 1 - len(objNewRow)))
+                    objNewRow[iCompanyColumn] = "0"
+        objOutputRows.append(objNewRow)
+
+    # allocate per company
+    for iCompany, pszCompanyColumn in enumerate(objCompanyColumns):
+        iCompanyColumn: int = objCompanyIndices[iCompany]
+        iManhourColumn: int = objManhourIndices[iCompany]
+        if iCompanyColumn < 0 or iManhourColumn < 0:
+            continue
+
+        fCompanyTotal: float = objCompanyTotals[iCompany]
+        fTotalSeconds: float = 0.0
+        for iRowIndex, objRow in enumerate(objOutputRows):
+            if iRowIndex == 0 or iManhourColumn >= len(objRow):
+                continue
+            fSeconds: float = parse_time_to_seconds(objRow[iManhourColumn])
+            if fSeconds > 0.0:
+                fTotalSeconds += fSeconds
+
+        if fTotalSeconds <= 0.0:
+            continue
+
+        for iRowIndex, objRow in enumerate(objOutputRows):
+            if iRowIndex == 0 or iManhourColumn >= len(objRow) or iCompanyColumn >= len(objRow):
+                continue
+            fSeconds = parse_time_to_seconds(objRow[iManhourColumn])
+            if fSeconds <= 0.0:
+                continue
+            fAllocation: float = fCompanyTotal * fSeconds / fTotalSeconds
+            fAllocation = float(int(round(fAllocation)))
+            objRow[iCompanyColumn] = format_number(fAllocation)
+            objOutputRows[iRowIndex] = objRow
+
+    return objOutputRows
+
+
+def insert_company_sg_admin_cost_columns(objRows: List[List[str]]) -> List[List[str]]:
+    if not objRows:
+        return objRows
+
+    objHeader: List[str] = objRows[0]
+    iAllocationIndex: int = find_column_index(objHeader, "配賦販管費")
+    iOperatingProfitIndex: int = find_column_index(objHeader, "営業利益")
+    if iAllocationIndex < 0 or iOperatingProfitIndex < 0:
+        return objRows
+
+    iInsertIndex: int = iAllocationIndex + 1
+    objNewColumns: List[str] = [
+        "1Cカンパニー販管費",
+        "2Cカンパニー販管費",
+        "3Cカンパニー販管費",
+        "4Cカンパニー販管費",
+        "事業開発カンパニー販管費",
+    ]
+    objNewHeader: List[str] = (
+        objHeader[:iInsertIndex] + objNewColumns + objHeader[iInsertIndex:]
+    )
+
+    iGrossProfitIndex: int = find_column_index(objNewHeader, "売上総利益")
+    iSellGeneralAdminTotalIndex: int = find_column_index(objNewHeader, "販売費及び一般管理費計")
+
+    objTargetMap: Dict[str, str] = {
+        "C001_1Cカンパニー販管費": "1Cカンパニー販管費",
+        "C002_2Cカンパニー販管費": "2Cカンパニー販管費",
+        "C003_3Cカンパニー販管費": "3Cカンパニー販管費",
+        "C004_4Cカンパニー販管費": "4Cカンパニー販管費",
+        "C005_事業開発カンパニー販管費": "事業開発カンパニー販管費",
+    }
+    objTargetColumnIndices: Dict[str, int] = {
+        pszColumnName: find_column_index(objNewHeader, pszColumnName)
+        for pszColumnName in objNewColumns
+    }
+
+    objOutputRows: List[List[str]] = [objNewHeader]
+    for objRow in objRows[1:]:
+        objNewRow: List[str] = objRow[:iInsertIndex] + [""] * len(objNewColumns) + objRow[iInsertIndex:]
+
+        pszRowName: str = objNewRow[0] if objNewRow else ""
+        pszTargetColumn: Optional[str] = objTargetMap.get(pszRowName)
+        if (
+            pszTargetColumn is not None
+            and iGrossProfitIndex >= 0
+            and iSellGeneralAdminTotalIndex > iGrossProfitIndex + 1
+        ):
+            fSum: float = 0.0
+            iEndIndex: int = min(iSellGeneralAdminTotalIndex, len(objNewRow))
+            for iColumnIndex in range(iGrossProfitIndex + 1, iEndIndex):
+                fSum += parse_number(objNewRow[iColumnIndex])
+            iTargetIndex: int = objTargetColumnIndices.get(pszTargetColumn, -1)
+            if iTargetIndex >= 0:
+                objNewRow[iTargetIndex] = format_number(fSum)
+
+        if len(objNewRow) < len(objNewHeader):
+            objNewRow.extend([""] * (len(objNewHeader) - len(objNewRow)))
+        objOutputRows.append(objNewRow)
+
+    return objOutputRows
+
+
 def process_pl_tsv(
     pszPlPath: str,
     pszOutputPath: str,
     pszOutputStep0001Path: str,
     pszOutputStep0002Path: str,
     pszOutputStep0003ZeroPath: str,
-    pszOutputStep0003Path: str,
-    pszOutputStep0004Path: str,
+    pszOutputStep0007Path: str,
+    pszOutputStep0008Path: str,
+    pszOutputStep0009Path: str,
     pszOutputStep0005Path: str,
     pszOutputStep0006Path: str,
     pszOutputFinalPath: str,
@@ -621,11 +775,8 @@ def process_pl_tsv(
             objRows,
             iGrossProfitColumnIndex,
             iOperatingProfitColumnIndex,
+            [],
         )
-
-    with open(pszOutputStep0003Path, "w", encoding="utf-8", newline="") as objOutputFile:
-        for objRow in objRows:
-            objOutputFile.write("\t".join(objRow) + "\n")
 
     iNonOperatingIncomeColumnIndex: int = -1
     iNonOperatingExpenseColumnIndex: int = -1
@@ -654,10 +805,6 @@ def process_pl_tsv(
             iOrdinaryProfitColumnIndex,
         )
 
-    with open(pszOutputStep0004Path, "w", encoding="utf-8", newline="") as objOutputFile:
-        for objRow in objRows:
-            objOutputFile.write("\t".join(objRow) + "\n")
-
     iExtraordinaryIncomeColumnIndex: int = -1
     iExtraordinaryLossColumnIndex: int = -1
     iPreTaxProfitColumnIndex: int = -1
@@ -685,9 +832,13 @@ def process_pl_tsv(
             iPreTaxProfitColumnIndex,
         )
 
+    objRows = insert_company_sg_admin_cost_columns(objRows)
+
     with open(pszOutputStep0005Path, "w", encoding="utf-8", newline="") as objOutputFile:
         for objRow in objRows:
             objOutputFile.write("\t".join(objRow) + "\n")
+
+    objRows = allocate_company_sg_admin_cost(objRows)
 
     iCorporateTaxColumnIndex: int = -1
     iCorporateTaxTotalColumnIndex: int = -1
@@ -718,6 +869,99 @@ def process_pl_tsv(
 
     with open(pszOutputStep0006Path, "w", encoding="utf-8", newline="") as objOutputFile:
         for objRow in objRows:
+            objOutputFile.write("\t".join(objRow) + "\n")
+
+    # step0007: 営業利益の再計算（入力は step0006）
+    objStep0007Rows: List[List[str]] = [list(objRow) for objRow in objRows]
+    iGrossProfitColumnIndex: int = -1
+    iOperatingProfitColumnIndex: int = -1
+    iSellGeneralAdminTotalIndex: int = -1
+    if objStep0007Rows:
+        objHeaderRow = objStep0007Rows[0]
+        for iColumnIndex, pszColumnName in enumerate(objHeaderRow):
+            if pszColumnName == "売上総利益":
+                iGrossProfitColumnIndex = iColumnIndex
+            elif pszColumnName == "営業利益":
+                iOperatingProfitColumnIndex = iColumnIndex
+            elif pszColumnName == "販売費及び一般管理費計":
+                iSellGeneralAdminTotalIndex = iColumnIndex
+
+    if iGrossProfitColumnIndex >= 0 and iOperatingProfitColumnIndex >= 0:
+        recalculate_operating_profit(
+            objStep0007Rows,
+            iGrossProfitColumnIndex,
+            iOperatingProfitColumnIndex,
+            [iSellGeneralAdminTotalIndex] if iSellGeneralAdminTotalIndex >= 0 else [],
+        )
+
+    with open(pszOutputStep0007Path, "w", encoding="utf-8", newline="") as objOutputFile:
+        for objRow in objStep0007Rows:
+            objOutputFile.write("\t".join(objRow) + "\n")
+
+    # step0008: 営業外収益・費用、経常利益の再計算（入力は step0007）
+    objStep0008Rows: List[List[str]] = [list(objRow) for objRow in objStep0007Rows]
+    iNonOperatingIncomeColumnIndex: int = -1
+    iNonOperatingExpenseColumnIndex: int = -1
+    iOrdinaryProfitColumnIndex: int = -1
+    if objStep0008Rows:
+        objHeaderRow = objStep0008Rows[0]
+        for iColumnIndex, pszColumnName in enumerate(objHeaderRow):
+            if pszColumnName == "営業外収益":
+                iNonOperatingIncomeColumnIndex = iColumnIndex
+            elif pszColumnName == "営業外費用":
+                iNonOperatingExpenseColumnIndex = iColumnIndex
+            elif pszColumnName == "経常利益":
+                iOrdinaryProfitColumnIndex = iColumnIndex
+
+    if (
+        iOperatingProfitColumnIndex >= 0
+        and iNonOperatingIncomeColumnIndex >= 0
+        and iNonOperatingExpenseColumnIndex >= 0
+        and iOrdinaryProfitColumnIndex >= 0
+    ):
+        recalculate_ordinary_profit(
+            objStep0008Rows,
+            iOperatingProfitColumnIndex,
+            iNonOperatingIncomeColumnIndex,
+            iNonOperatingExpenseColumnIndex,
+            iOrdinaryProfitColumnIndex,
+        )
+
+    with open(pszOutputStep0008Path, "w", encoding="utf-8", newline="") as objOutputFile:
+        for objRow in objStep0008Rows:
+            objOutputFile.write("\t".join(objRow) + "\n")
+
+    # step0009: 税引前当期純利益の再計算（入力は step0008）
+    objStep0009Rows: List[List[str]] = [list(objRow) for objRow in objStep0008Rows]
+    iExtraordinaryIncomeColumnIndex: int = -1
+    iExtraordinaryLossColumnIndex: int = -1
+    iPreTaxProfitColumnIndex: int = -1
+    if objStep0009Rows:
+        objHeaderRow = objStep0009Rows[0]
+        for iColumnIndex, pszColumnName in enumerate(objHeaderRow):
+            if pszColumnName == "特別利益":
+                iExtraordinaryIncomeColumnIndex = iColumnIndex
+            elif pszColumnName == "特別損失":
+                iExtraordinaryLossColumnIndex = iColumnIndex
+            elif pszColumnName == "税引前当期純利益":
+                iPreTaxProfitColumnIndex = iColumnIndex
+
+    if (
+        iOrdinaryProfitColumnIndex >= 0
+        and iExtraordinaryIncomeColumnIndex >= 0
+        and iExtraordinaryLossColumnIndex >= 0
+        and iPreTaxProfitColumnIndex >= 0
+    ):
+        recalculate_pre_tax_profit(
+            objStep0009Rows,
+            iOrdinaryProfitColumnIndex,
+            iExtraordinaryIncomeColumnIndex,
+            iExtraordinaryLossColumnIndex,
+            iPreTaxProfitColumnIndex,
+        )
+
+    with open(pszOutputStep0009Path, "w", encoding="utf-8", newline="") as objOutputFile:
+        for objRow in objStep0009Rows:
             objOutputFile.write("\t".join(objRow) + "\n")
 
     with open(pszOutputFinalPath, "w", encoding="utf-8", newline="") as objOutputFile:
@@ -1929,8 +2173,9 @@ def main(argv: list[str]) -> int:
         pszOutputStep0003ZeroPath: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0003_")
         pszOutputStep0003Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0007_")
         pszOutputStep0004Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0008_")
-        pszOutputStep0005Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0009_")
-        pszOutputStep0006Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0010_")
+        pszOutputStep0009Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0009_")
+        pszOutputStep0005Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0005_")
+        pszOutputStep0006Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0006_")
 
         if not os.path.exists(pszManhourPath):
             print(f"Input file not found: {pszManhourPath}")
@@ -1949,6 +2194,7 @@ def main(argv: list[str]) -> int:
             pszOutputStep0003ZeroPath,
             pszOutputStep0003Path,
             pszOutputStep0004Path,
+            pszOutputStep0009Path,
             pszOutputStep0005Path,
             pszOutputStep0006Path,
             pszOutputFinalPath,
@@ -1961,6 +2207,7 @@ def main(argv: list[str]) -> int:
         print(f"Output: {pszOutputStep0003ZeroPath}")
         print(f"Output: {pszOutputStep0003Path}")
         print(f"Output: {pszOutputStep0004Path}")
+        print(f"Output: {pszOutputStep0009Path}")
         print(f"Output: {pszOutputStep0005Path}")
         print(f"Output: {pszOutputStep0006Path}")
         print(f"Output: {pszOutputFinalPath}")
