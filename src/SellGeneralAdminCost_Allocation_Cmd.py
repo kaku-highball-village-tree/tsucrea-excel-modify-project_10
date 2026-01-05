@@ -436,6 +436,69 @@ def recalculate_net_profit(
         objRows[iRowIndex] = objRow
 
 
+def insert_company_sg_admin_cost_columns(objRows: List[List[str]]) -> List[List[str]]:
+    if not objRows:
+        return objRows
+
+    objHeader: List[str] = objRows[0]
+    iAllocationIndex: int = find_column_index(objHeader, "配賦販管費")
+    iOperatingProfitIndex: int = find_column_index(objHeader, "営業利益")
+    if iAllocationIndex < 0 or iOperatingProfitIndex < 0:
+        return objRows
+
+    iInsertIndex: int = iAllocationIndex + 1
+    objNewColumns: List[str] = [
+        "1Cカンパニー販管費",
+        "2Cカンパニー販管費",
+        "3Cカンパニー販管費",
+        "4Cカンパニー販管費",
+        "事業開発カンパニー販管費",
+    ]
+    objNewHeader: List[str] = (
+        objHeader[:iInsertIndex] + objNewColumns + objHeader[iInsertIndex:]
+    )
+
+    iGrossProfitIndex: int = find_column_index(objNewHeader, "売上総利益")
+    iSellGeneralAdminTotalIndex: int = find_column_index(objNewHeader, "販売費及び一般管理費計")
+
+    objTargetMap: Dict[str, str] = {
+        "C001_1Cカンパニー販管費": "1Cカンパニー販管費",
+        "C002_2Cカンパニー販管費": "2Cカンパニー販管費",
+        "C003_3Cカンパニー販管費": "3Cカンパニー販管費",
+        "C004_4Cカンパニー販管費": "4Cカンパニー販管費",
+        "C005_事業開発カンパニー販管費": "事業開発カンパニー販管費",
+    }
+    objTargetColumnIndices: Dict[str, int] = {
+        pszColumnName: find_column_index(objNewHeader, pszColumnName)
+        for pszColumnName in objNewColumns
+    }
+
+    objOutputRows: List[List[str]] = [objNewHeader]
+    for objRow in objRows[1:]:
+        objNewRow: List[str] = objRow[:iInsertIndex] + [""] * len(objNewColumns) + objRow[iInsertIndex:]
+
+        pszRowName: str = objNewRow[0] if objNewRow else ""
+        pszTargetColumn: Optional[str] = objTargetMap.get(pszRowName)
+        if (
+            pszTargetColumn is not None
+            and iGrossProfitIndex >= 0
+            and iSellGeneralAdminTotalIndex > iGrossProfitIndex + 1
+        ):
+            fSum: float = 0.0
+            iEndIndex: int = min(iSellGeneralAdminTotalIndex, len(objNewRow))
+            for iColumnIndex in range(iGrossProfitIndex + 1, iEndIndex):
+                fSum += parse_number(objNewRow[iColumnIndex])
+            iTargetIndex: int = objTargetColumnIndices.get(pszTargetColumn, -1)
+            if iTargetIndex >= 0:
+                objNewRow[iTargetIndex] = format_number(fSum)
+
+        if len(objNewRow) < len(objNewHeader):
+            objNewRow.extend([""] * (len(objNewHeader) - len(objNewRow)))
+        objOutputRows.append(objNewRow)
+
+    return objOutputRows
+
+
 def process_pl_tsv(
     pszPlPath: str,
     pszOutputPath: str,
@@ -684,6 +747,8 @@ def process_pl_tsv(
             iExtraordinaryLossColumnIndex,
             iPreTaxProfitColumnIndex,
         )
+
+    objRows = insert_company_sg_admin_cost_columns(objRows)
 
     with open(pszOutputStep0005Path, "w", encoding="utf-8", newline="") as objOutputFile:
         for objRow in objRows:
@@ -1929,8 +1994,8 @@ def main(argv: list[str]) -> int:
         pszOutputStep0003ZeroPath: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0003_")
         pszOutputStep0003Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0007_")
         pszOutputStep0004Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0008_")
-        pszOutputStep0005Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0009_")
-        pszOutputStep0006Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0010_")
+        pszOutputStep0005Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0005_")
+        pszOutputStep0006Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0006_")
 
         if not os.path.exists(pszManhourPath):
             print(f"Input file not found: {pszManhourPath}")
