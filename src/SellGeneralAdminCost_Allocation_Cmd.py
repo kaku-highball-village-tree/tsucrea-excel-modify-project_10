@@ -872,6 +872,29 @@ def process_pl_tsv(
         for objRow in objRows:
             objOutputFile.write("\t".join(objRow) + "\n")
 
+    # step0007: 営業利益の再計算（入力は step0006）
+    objStep0007Rows: List[List[str]] = [list(objRow) for objRow in objRows]
+    iGrossProfitColumnIndex: int = -1
+    iOperatingProfitColumnIndex: int = -1
+    if objStep0007Rows:
+        objHeaderRow = objStep0007Rows[0]
+        for iColumnIndex, pszColumnName in enumerate(objHeaderRow):
+            if pszColumnName == "売上総利益":
+                iGrossProfitColumnIndex = iColumnIndex
+            elif pszColumnName == "営業利益":
+                iOperatingProfitColumnIndex = iColumnIndex
+
+    if iGrossProfitColumnIndex >= 0 and iOperatingProfitColumnIndex >= 0:
+        recalculate_operating_profit(
+            objStep0007Rows,
+            iGrossProfitColumnIndex,
+            iOperatingProfitColumnIndex,
+        )
+
+    with open(pszOutputStep0003Path, "w", encoding="utf-8", newline="") as objOutputFile:
+        for objRow in objStep0007Rows:
+            objOutputFile.write("\t".join(objRow) + "\n")
+
     with open(pszOutputFinalPath, "w", encoding="utf-8", newline="") as objOutputFile:
         for objRow in objRows:
             objOutputFile.write("\t".join(objRow) + "\n")
