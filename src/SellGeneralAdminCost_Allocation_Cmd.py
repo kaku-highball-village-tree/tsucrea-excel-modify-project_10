@@ -1746,6 +1746,11 @@ def create_pj_summary(
         "売上原価",
         "売上総利益",
         "配賦販管費",
+        "1Cカンパニー販管費",
+        "2Cカンパニー販管費",
+        "3Cカンパニー販管費",
+        "4Cカンパニー販管費",
+        "事業開発カンパニー販管費",
     ]
     objSingleStep0002Rows: List[List[str]] = filter_rows_by_columns(
         objSingleOutputRows,
