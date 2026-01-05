@@ -595,8 +595,9 @@ def process_pl_tsv(
     pszOutputStep0001Path: str,
     pszOutputStep0002Path: str,
     pszOutputStep0003ZeroPath: str,
-    pszOutputStep0003Path: str,
-    pszOutputStep0004Path: str,
+    pszOutputStep0007Path: str,
+    pszOutputStep0008Path: str,
+    pszOutputStep0009Path: str,
     pszOutputStep0005Path: str,
     pszOutputStep0006Path: str,
     pszOutputFinalPath: str,
@@ -777,10 +778,6 @@ def process_pl_tsv(
             [],
         )
 
-    with open(pszOutputStep0003Path, "w", encoding="utf-8", newline="") as objOutputFile:
-        for objRow in objRows:
-            objOutputFile.write("\t".join(objRow) + "\n")
-
     iNonOperatingIncomeColumnIndex: int = -1
     iNonOperatingExpenseColumnIndex: int = -1
     iOrdinaryProfitColumnIndex: int = -1
@@ -807,10 +804,6 @@ def process_pl_tsv(
             iNonOperatingExpenseColumnIndex,
             iOrdinaryProfitColumnIndex,
         )
-
-    with open(pszOutputStep0004Path, "w", encoding="utf-8", newline="") as objOutputFile:
-        for objRow in objRows:
-            objOutputFile.write("\t".join(objRow) + "\n")
 
     iExtraordinaryIncomeColumnIndex: int = -1
     iExtraordinaryLossColumnIndex: int = -1
@@ -901,8 +894,74 @@ def process_pl_tsv(
             [iSellGeneralAdminTotalIndex] if iSellGeneralAdminTotalIndex >= 0 else [],
         )
 
-    with open(pszOutputStep0003Path, "w", encoding="utf-8", newline="") as objOutputFile:
+    with open(pszOutputStep0007Path, "w", encoding="utf-8", newline="") as objOutputFile:
         for objRow in objStep0007Rows:
+            objOutputFile.write("\t".join(objRow) + "\n")
+
+    # step0008: 営業外収益・費用、経常利益の再計算（入力は step0007）
+    objStep0008Rows: List[List[str]] = [list(objRow) for objRow in objStep0007Rows]
+    iNonOperatingIncomeColumnIndex: int = -1
+    iNonOperatingExpenseColumnIndex: int = -1
+    iOrdinaryProfitColumnIndex: int = -1
+    if objStep0008Rows:
+        objHeaderRow = objStep0008Rows[0]
+        for iColumnIndex, pszColumnName in enumerate(objHeaderRow):
+            if pszColumnName == "営業外収益":
+                iNonOperatingIncomeColumnIndex = iColumnIndex
+            elif pszColumnName == "営業外費用":
+                iNonOperatingExpenseColumnIndex = iColumnIndex
+            elif pszColumnName == "経常利益":
+                iOrdinaryProfitColumnIndex = iColumnIndex
+
+    if (
+        iOperatingProfitColumnIndex >= 0
+        and iNonOperatingIncomeColumnIndex >= 0
+        and iNonOperatingExpenseColumnIndex >= 0
+        and iOrdinaryProfitColumnIndex >= 0
+    ):
+        recalculate_ordinary_profit(
+            objStep0008Rows,
+            iOperatingProfitColumnIndex,
+            iNonOperatingIncomeColumnIndex,
+            iNonOperatingExpenseColumnIndex,
+            iOrdinaryProfitColumnIndex,
+        )
+
+    with open(pszOutputStep0008Path, "w", encoding="utf-8", newline="") as objOutputFile:
+        for objRow in objStep0008Rows:
+            objOutputFile.write("\t".join(objRow) + "\n")
+
+    # step0009: 税引前当期純利益の再計算（入力は step0008）
+    objStep0009Rows: List[List[str]] = [list(objRow) for objRow in objStep0008Rows]
+    iExtraordinaryIncomeColumnIndex: int = -1
+    iExtraordinaryLossColumnIndex: int = -1
+    iPreTaxProfitColumnIndex: int = -1
+    if objStep0009Rows:
+        objHeaderRow = objStep0009Rows[0]
+        for iColumnIndex, pszColumnName in enumerate(objHeaderRow):
+            if pszColumnName == "特別利益":
+                iExtraordinaryIncomeColumnIndex = iColumnIndex
+            elif pszColumnName == "特別損失":
+                iExtraordinaryLossColumnIndex = iColumnIndex
+            elif pszColumnName == "税引前当期純利益":
+                iPreTaxProfitColumnIndex = iColumnIndex
+
+    if (
+        iOrdinaryProfitColumnIndex >= 0
+        and iExtraordinaryIncomeColumnIndex >= 0
+        and iExtraordinaryLossColumnIndex >= 0
+        and iPreTaxProfitColumnIndex >= 0
+    ):
+        recalculate_pre_tax_profit(
+            objStep0009Rows,
+            iOrdinaryProfitColumnIndex,
+            iExtraordinaryIncomeColumnIndex,
+            iExtraordinaryLossColumnIndex,
+            iPreTaxProfitColumnIndex,
+        )
+
+    with open(pszOutputStep0009Path, "w", encoding="utf-8", newline="") as objOutputFile:
+        for objRow in objStep0009Rows:
             objOutputFile.write("\t".join(objRow) + "\n")
 
     with open(pszOutputFinalPath, "w", encoding="utf-8", newline="") as objOutputFile:
@@ -2114,6 +2173,7 @@ def main(argv: list[str]) -> int:
         pszOutputStep0003ZeroPath: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0003_")
         pszOutputStep0003Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0007_")
         pszOutputStep0004Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0008_")
+        pszOutputStep0009Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0009_")
         pszOutputStep0005Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0005_")
         pszOutputStep0006Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0006_")
 
@@ -2134,6 +2194,7 @@ def main(argv: list[str]) -> int:
             pszOutputStep0003ZeroPath,
             pszOutputStep0003Path,
             pszOutputStep0004Path,
+            pszOutputStep0009Path,
             pszOutputStep0005Path,
             pszOutputStep0006Path,
             pszOutputFinalPath,
@@ -2146,6 +2207,7 @@ def main(argv: list[str]) -> int:
         print(f"Output: {pszOutputStep0003ZeroPath}")
         print(f"Output: {pszOutputStep0003Path}")
         print(f"Output: {pszOutputStep0004Path}")
+        print(f"Output: {pszOutputStep0009Path}")
         print(f"Output: {pszOutputStep0005Path}")
         print(f"Output: {pszOutputStep0006Path}")
         print(f"Output: {pszOutputFinalPath}")
