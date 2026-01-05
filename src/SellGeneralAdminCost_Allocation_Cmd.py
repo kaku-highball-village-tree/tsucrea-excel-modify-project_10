@@ -436,6 +436,91 @@ def recalculate_net_profit(
         objRows[iRowIndex] = objRow
 
 
+def allocate_company_sg_admin_cost(objRows: List[List[str]]) -> List[List[str]]:
+    if not objRows:
+        return objRows
+
+    objHeader: List[str] = objRows[0]
+    objCompanyColumns: List[str] = [
+        "1Cカンパニー販管費",
+        "2Cカンパニー販管費",
+        "3Cカンパニー販管費",
+        "4Cカンパニー販管費",
+        "事業開発カンパニー販管費",
+    ]
+    objCompanyManhourColumns: List[str] = [
+        "1Cカンパニー販管費の工数",
+        "2Cカンパニー販管費の工数",
+        "3Cカンパニー販管費の工数",
+        "4Cカンパニー販管費の工数",
+        "事業開発カンパニー販管費の工数",
+    ]
+    objCompanyRows: List[str] = [
+        "C001_1Cカンパニー販管費",
+        "C002_2Cカンパニー販管費",
+        "C003_3Cカンパニー販管費",
+        "C004_4Cカンパニー販管費",
+        "C005_事業開発カンパニー販管費",
+    ]
+
+    objCompanyIndices: List[int] = [find_column_index(objHeader, pszName) for pszName in objCompanyColumns]
+    objManhourIndices: List[int] = [find_column_index(objHeader, pszName) for pszName in objCompanyManhourColumns]
+
+    objCompanyTotals: List[float] = [0.0] * len(objCompanyColumns)
+    for iRowIndex, objRow in enumerate(objRows):
+        if iRowIndex == 0:
+            continue
+        pszRowName: str = objRow[0] if objRow else ""
+        if pszRowName in objCompanyRows:
+            iCompany: int = objCompanyRows.index(pszRowName)
+            iCompanyColumn: int = objCompanyIndices[iCompany]
+            if 0 <= iCompanyColumn < len(objRow):
+                objCompanyTotals[iCompany] = parse_number(objRow[iCompanyColumn])
+
+    # zero initialize all company cost columns
+    objOutputRows: List[List[str]] = []
+    for iRowIndex, objRow in enumerate(objRows):
+        objNewRow: List[str] = list(objRow)
+        for iCompanyColumn in objCompanyIndices:
+            if iCompanyColumn >= 0:
+                if len(objNewRow) <= iCompanyColumn:
+                    objNewRow.extend([""] * (iCompanyColumn + 1 - len(objNewRow)))
+                objNewRow[iCompanyColumn] = "0"
+        objOutputRows.append(objNewRow)
+
+    # allocate per company
+    for iCompany, pszCompanyColumn in enumerate(objCompanyColumns):
+        iCompanyColumn: int = objCompanyIndices[iCompany]
+        iManhourColumn: int = objManhourIndices[iCompany]
+        if iCompanyColumn < 0 or iManhourColumn < 0:
+            continue
+
+        fCompanyTotal: float = objCompanyTotals[iCompany]
+        fTotalSeconds: float = 0.0
+        for iRowIndex, objRow in enumerate(objOutputRows):
+            if iRowIndex == 0 or iManhourColumn >= len(objRow):
+                continue
+            fSeconds: float = parse_time_to_seconds(objRow[iManhourColumn])
+            if fSeconds > 0.0:
+                fTotalSeconds += fSeconds
+
+        if fTotalSeconds <= 0.0:
+            continue
+
+        for iRowIndex, objRow in enumerate(objOutputRows):
+            if iRowIndex == 0 or iManhourColumn >= len(objRow) or iCompanyColumn >= len(objRow):
+                continue
+            fSeconds = parse_time_to_seconds(objRow[iManhourColumn])
+            if fSeconds <= 0.0:
+                continue
+            fAllocation: float = fCompanyTotal * fSeconds / fTotalSeconds
+            fAllocation = float(int(round(fAllocation)))
+            objRow[iCompanyColumn] = format_number(fAllocation)
+            objOutputRows[iRowIndex] = objRow
+
+    return objOutputRows
+
+
 def insert_company_sg_admin_cost_columns(objRows: List[List[str]]) -> List[List[str]]:
     if not objRows:
         return objRows
@@ -753,6 +838,8 @@ def process_pl_tsv(
     with open(pszOutputStep0005Path, "w", encoding="utf-8", newline="") as objOutputFile:
         for objRow in objRows:
             objOutputFile.write("\t".join(objRow) + "\n")
+
+    objRows = allocate_company_sg_admin_cost(objRows)
 
     iCorporateTaxColumnIndex: int = -1
     iCorporateTaxTotalColumnIndex: int = -1
