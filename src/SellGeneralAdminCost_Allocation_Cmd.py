@@ -279,11 +279,13 @@ def recalculate_operating_profit(
     objRows: List[List[str]],
     iGrossProfitColumnIndex: int,
     iOperatingProfitColumnIndex: int,
+    objExcludeColumns: Optional[List[int]] = None,
 ) -> None:
     if iGrossProfitColumnIndex < 0 or iOperatingProfitColumnIndex < 0:
         return
     if iOperatingProfitColumnIndex <= iGrossProfitColumnIndex:
         return
+    objExcludeSet = set(objExcludeColumns or [])
 
     for iRowIndex in range(1, len(objRows)):
         objRow: List[str] = objRows[iRowIndex]
@@ -293,6 +295,8 @@ def recalculate_operating_profit(
         fGrossProfit: float = parse_number(objRow[iGrossProfitColumnIndex])
         fDeductionSum: float = 0.0
         for iColumnIndex in range(iGrossProfitColumnIndex + 1, iOperatingProfitColumnIndex):
+            if iColumnIndex in objExcludeSet:
+                continue
             if iColumnIndex >= len(objRow):
                 continue
             fDeductionSum += parse_number(objRow[iColumnIndex])
@@ -481,11 +485,12 @@ def allocate_company_sg_admin_cost(objRows: List[List[str]]) -> List[List[str]]:
     objOutputRows: List[List[str]] = []
     for iRowIndex, objRow in enumerate(objRows):
         objNewRow: List[str] = list(objRow)
-        for iCompanyColumn in objCompanyIndices:
-            if iCompanyColumn >= 0:
-                if len(objNewRow) <= iCompanyColumn:
-                    objNewRow.extend([""] * (iCompanyColumn + 1 - len(objNewRow)))
-                objNewRow[iCompanyColumn] = "0"
+        if iRowIndex > 0:
+            for iCompanyColumn in objCompanyIndices:
+                if iCompanyColumn >= 0:
+                    if len(objNewRow) <= iCompanyColumn:
+                        objNewRow.extend([""] * (iCompanyColumn + 1 - len(objNewRow)))
+                    objNewRow[iCompanyColumn] = "0"
         objOutputRows.append(objNewRow)
 
     # allocate per company
@@ -769,6 +774,7 @@ def process_pl_tsv(
             objRows,
             iGrossProfitColumnIndex,
             iOperatingProfitColumnIndex,
+            [],
         )
 
     with open(pszOutputStep0003Path, "w", encoding="utf-8", newline="") as objOutputFile:
@@ -876,6 +882,7 @@ def process_pl_tsv(
     objStep0007Rows: List[List[str]] = [list(objRow) for objRow in objRows]
     iGrossProfitColumnIndex: int = -1
     iOperatingProfitColumnIndex: int = -1
+    iSellGeneralAdminTotalIndex: int = -1
     if objStep0007Rows:
         objHeaderRow = objStep0007Rows[0]
         for iColumnIndex, pszColumnName in enumerate(objHeaderRow):
@@ -883,12 +890,15 @@ def process_pl_tsv(
                 iGrossProfitColumnIndex = iColumnIndex
             elif pszColumnName == "営業利益":
                 iOperatingProfitColumnIndex = iColumnIndex
+            elif pszColumnName == "販売費及び一般管理費計":
+                iSellGeneralAdminTotalIndex = iColumnIndex
 
     if iGrossProfitColumnIndex >= 0 and iOperatingProfitColumnIndex >= 0:
         recalculate_operating_profit(
             objStep0007Rows,
             iGrossProfitColumnIndex,
             iOperatingProfitColumnIndex,
+            [iSellGeneralAdminTotalIndex] if iSellGeneralAdminTotalIndex >= 0 else [],
         )
 
     with open(pszOutputStep0003Path, "w", encoding="utf-8", newline="") as objOutputFile:
