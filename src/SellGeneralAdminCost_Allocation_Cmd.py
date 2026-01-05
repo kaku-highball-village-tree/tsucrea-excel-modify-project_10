@@ -1278,6 +1278,60 @@ def append_gross_margin_column(objRows: List[List[str]]) -> List[List[str]]:
     return objOutputRows
 
 
+def collapse_company_sg_admin_cost_columns(objRows: List[List[str]]) -> List[List[str]]:
+    if not objRows:
+        return []
+
+    objTargetColumns: List[str] = [
+        "1Cカンパニー販管費",
+        "2Cカンパニー販管費",
+        "3Cカンパニー販管費",
+        "4Cカンパニー販管費",
+        "事業開発カンパニー販管費",
+    ]
+    objHeader: List[str] = objRows[0]
+    objTargetIndices: List[int] = [find_column_index(objHeader, pszColumn) for pszColumn in objTargetColumns]
+    objValidIndices: List[int] = [iIndex for iIndex in objTargetIndices if iIndex >= 0]
+    if not objValidIndices:
+        return objRows
+
+    iInsertIndex: int = min(objValidIndices)
+    objOutputRows: List[List[str]] = []
+
+    objNewHeader: List[str] = []
+    bInsertedHeader: bool = False
+    for iColumnIndex, pszValue in enumerate(objHeader):
+        if iColumnIndex in objValidIndices:
+            if not bInsertedHeader:
+                objNewHeader.append("カンパニー販管費")
+                bInsertedHeader = True
+            continue
+        objNewHeader.append(pszValue)
+    objOutputRows.append(objNewHeader)
+
+    for objRow in objRows[1:]:
+        fSum: float = 0.0
+        for iColumnIndex in objValidIndices:
+            if 0 <= iColumnIndex < len(objRow):
+                fSum += parse_number(objRow[iColumnIndex])
+
+        objNewRow: List[str] = []
+        bInserted: bool = False
+        for iColumnIndex, pszValue in enumerate(objRow):
+            if iColumnIndex in objValidIndices:
+                if not bInserted:
+                    objNewRow.append(format_number(fSum))
+                    bInserted = True
+                continue
+            objNewRow.append(pszValue)
+
+        if not bInserted:
+            objNewRow.insert(iInsertIndex, format_number(fSum))
+        objOutputRows.append(objNewRow)
+
+    return objOutputRows
+
+
 def build_report_file_path(
     pszDirectory: str,
     pszPrefix: str,
@@ -1770,6 +1824,23 @@ def create_pj_summary(
     )
     write_tsv_rows(pszSingleStep0002Path, objSingleStep0002Rows)
     write_tsv_rows(pszCumulativeStep0002Path, objCumulativeStep0002Rows)
+
+    objSingleStep0003CollapsedRows: List[List[str]] = collapse_company_sg_admin_cost_columns(
+        objSingleStep0002Rows
+    )
+    objCumulativeStep0003CollapsedRows: List[List[str]] = collapse_company_sg_admin_cost_columns(
+        objCumulativeStep0002Rows
+    )
+    pszSingleStep0003CollapsedPath: str = os.path.join(
+        pszDirectory,
+        "0001_PJサマリ_step0003_単月_損益計算書.tsv",
+    )
+    pszCumulativeStep0003CollapsedPath: str = os.path.join(
+        pszDirectory,
+        "0001_PJサマリ_step0003_累計_損益計算書.tsv",
+    )
+    write_tsv_rows(pszSingleStep0003CollapsedPath, objSingleStep0003CollapsedRows)
+    write_tsv_rows(pszCumulativeStep0003CollapsedPath, objCumulativeStep0003CollapsedRows)
 
     objSingleStep0003Rows: List[List[str]] = append_gross_margin_column(objSingleStep0002Rows)
     objCumulativeStep0003Rows: List[List[str]] = append_gross_margin_column(
