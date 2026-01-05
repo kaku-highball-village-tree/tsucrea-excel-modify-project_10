@@ -1842,9 +1842,9 @@ def create_pj_summary(
     write_tsv_rows(pszSingleStep0003CollapsedPath, objSingleStep0003CollapsedRows)
     write_tsv_rows(pszCumulativeStep0003CollapsedPath, objCumulativeStep0003CollapsedRows)
 
-    objSingleStep0003Rows: List[List[str]] = append_gross_margin_column(objSingleStep0002Rows)
+    objSingleStep0003Rows: List[List[str]] = append_gross_margin_column(objSingleStep0003CollapsedRows)
     objCumulativeStep0003Rows: List[List[str]] = append_gross_margin_column(
-        objCumulativeStep0002Rows
+        objCumulativeStep0003CollapsedRows
     )
     pszSingleStep0003Path: str = os.path.join(
         pszDirectory,
