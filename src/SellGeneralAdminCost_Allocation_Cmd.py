@@ -760,6 +760,7 @@ def process_pl_tsv(
             objOutputFile.write("\t".join(objRow) + "\n")
     # step0004の処理
     # ここまで
+    move_files_to_temp([pszOutputStep0004Path], os.getcwd())
 
     iGrossProfitColumnIndex: int = -1
     iOperatingProfitColumnIndex: int = -1
@@ -1044,6 +1045,21 @@ def write_transposed_tsv(pszInputPath: str) -> None:
     with open(pszOutputPath, "w", encoding="utf-8", newline="") as objOutputFile:
         for objRow in objTransposed:
             objOutputFile.write("\t".join(objRow) + "\n")
+
+
+def move_files_to_temp(objFilePaths: List[str], pszBaseDirectory: str) -> None:
+    if not objFilePaths:
+        return
+
+    pszTempDirectory: str = os.path.join(pszBaseDirectory, "temp")
+    os.makedirs(pszTempDirectory, exist_ok=True)
+
+    for pszFilePath in objFilePaths:
+        if not os.path.isfile(pszFilePath):
+            continue
+        pszFileName: str = os.path.basename(pszFilePath)
+        pszTempPath: str = os.path.join(pszTempDirectory, pszFileName)
+        shutil.move(pszFilePath, pszTempPath)
 
 
 def move_files_to_temp_and_copy_back(objFilePaths: List[str], pszBaseDirectory: str) -> None:
