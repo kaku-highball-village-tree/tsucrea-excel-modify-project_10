@@ -1244,6 +1244,7 @@ def write_tsv_rows(pszPath: str, objRows: List[List[str]]) -> None:
 
 
 g_pszSelectedRangePath: Optional[str] = None
+<<<<<<< codex/show-specifications-for-step0010-sl9ufs
 g_pszSelectedRangeText: Optional[str] = None
 
 
@@ -1252,6 +1253,15 @@ def ensure_selected_range_file(pszBaseDirectory: str, pszRangeText: str) -> str:
     pszCandidate: str = os.path.join(pszBaseDirectory, pszFileName)
     with open(pszCandidate, "w", encoding="utf-8", newline="") as objFile:
         objFile.write(f"採用範囲: {pszRangeText}\n")
+=======
+
+
+def ensure_selected_range_file(pszBaseDirectory: str) -> str:
+    pszFileName: str = "SellGeneralAdminCost_Allocation_DnD_SelectedRange.txt"
+    pszCandidate: str = os.path.join(pszBaseDirectory, pszFileName)
+    with open(pszCandidate, "w", encoding="utf-8", newline="") as objFile:
+        objFile.write("採用範囲: 2025年4月〜2025年10月\n\n")
+>>>>>>> main
     return pszCandidate
 
 
@@ -1267,6 +1277,7 @@ def record_created_file(pszPath: str) -> None:
         return
 
 
+<<<<<<< codex/show-specifications-for-step0010-sl9ufs
 def extract_year_months_from_paths(objPaths: List[str]) -> List[Tuple[int, int]]:
     objMatches: List[Tuple[int, int]] = []
     objPattern = re.compile(r"(20\\d{2})年(\\d{1,2})月")
@@ -1317,6 +1328,60 @@ def build_range_text_from_paths(objPaths: List[str]) -> Optional[str]:
     iStartYear, iStartMonth = objMonths[0]
     iEndYear, iEndMonth = objMonths[-1]
     return f"{iStartYear}年{iStartMonth}月〜{iEndYear}年{iEndMonth}月"
+=======
+g_pszSelectedRangePath: Optional[str] = None
+
+
+def ensure_selected_range_file(pszBaseDirectory: str) -> str:
+    pszFileName: str = "SellGeneralAdminCost_Allocation_DnD_SelectedRange.txt"
+    pszCandidate: str = os.path.join(pszBaseDirectory, pszFileName)
+    pszContent: str = """採用範囲: 2025年4月〜2025年10月
+
+//
+// 単月_財務諸表
+//
+
+8月決算の場合
+(2025年08月が前会計期間の末月だから。)
+損益計算書_販管費配賦_step0010_2025年08月_A∪B_プロジェクト名_C∪D.tsv
+
+(2025年10月が当会計期間内で一番最新だから。)
+損益計算書_販管費配賦_step0010_2025年10月_A∪B_プロジェクト名_C∪D.tsv
+
+3月決算の場合
+(2025年10月が当会計期間内で一番最新だから。)
+損益計算書_販管費配賦_step0010_2025年10月_A∪B_プロジェクト名_C∪D.tsv
+(2026年03月が当会計期間の末月だから。)
+なし。←期日未到来だから。
+
+//
+// 累計_財務諸表
+//
+
+8月決算の場合
+累計_製造原価報告書_2025年04月_2025年08月.tsv
+累計_製造原価報告書_2025年04月_2025年08月_vertical.tsv
+累計_製造原価報告書_2025年09月_2025年10月.tsv
+累計_製造原価報告書_2025年09月_2025年10月_vertical.tsv
+累計_損益計算書_2025年04月_2025年08月.tsv
+累計_損益計算書_2025年04月_2025年08月_vertical.tsv
+累計_損益計算書_2025年09月_2025年10月.tsv
+累計_損益計算書_2025年09月_2025年10月_vertical.tsv
+
+3月決算の場合
+累計_製造原価報告書_2025年04月_2025年10月.tsv
+累計_製造原価報告書_2025年04月_2025年10月_vertical.tsv
+累計_損益計算書_2025年04月_2025年10月.tsv
+累計_損益計算書_2025年04月_2025年10月_vertical.tsv
+"""
+    with open(pszCandidate, "w", encoding="utf-8", newline="") as objFile:
+        objFile.write(pszContent)
+    return pszCandidate
+
+
+def record_created_file(pszPath: str) -> None:
+    return
+>>>>>>> main
 
 
 def append_gross_margin_column(objRows: List[List[str]]) -> List[List[str]]:
@@ -2320,6 +2385,7 @@ def main(argv: list[str]) -> int:
         print_usage()
         return 1
 
+<<<<<<< codex/show-specifications-for-step0010-sl9ufs
     global g_pszSelectedRangePath, g_pszSelectedRangeText
     pszBaseDirectory: str = os.getcwd()
     pszRangeText: Optional[str] = build_range_text_from_paths(argv[1:])
@@ -2329,6 +2395,13 @@ def main(argv: list[str]) -> int:
     pszRangePath: Optional[str] = find_selected_range_path(pszBaseDirectory)
     if pszRangePath is None:
         pszRangePath = ensure_selected_range_file(pszBaseDirectory, pszRangeText)
+=======
+    global g_pszSelectedRangePath
+    pszBaseDirectory: str = os.getcwd()
+    pszRangePath: Optional[str] = find_selected_range_path(pszBaseDirectory)
+    if pszRangePath is None:
+        pszRangePath = ensure_selected_range_file(pszBaseDirectory)
+>>>>>>> main
     g_pszSelectedRangePath = pszRangePath
 
     objCsvInputs: List[str] = [pszPath for pszPath in argv[1:] if pszPath.lower().endswith(".csv")]
