@@ -600,6 +600,7 @@ def process_pl_tsv(
     pszOutputStep0009Path: str,
     pszOutputStep0005Path: str,
     pszOutputStep0006Path: str,
+    pszOutputStep0010Path: str,
     pszOutputFinalPath: str,
     objManhourMap: Dict[str, List[str]],
     objCompanyMap: Dict[str, str],
@@ -759,6 +760,7 @@ def process_pl_tsv(
             objOutputFile.write("\t".join(objRow) + "\n")
     # step0004の処理
     # ここまで
+    move_files_to_temp([pszOutputStep0004Path], os.getcwd())
 
     iGrossProfitColumnIndex: int = -1
     iOperatingProfitColumnIndex: int = -1
@@ -964,6 +966,48 @@ def process_pl_tsv(
         for objRow in objStep0009Rows:
             objOutputFile.write("\t".join(objRow) + "\n")
 
+    objStep0010Rows: List[List[str]] = [list(objRow) for objRow in objStep0009Rows]
+    iCorporateTaxColumnIndexStep0010: int = -1
+    iCorporateTaxTotalColumnIndexStep0010: int = -1
+    iNetProfitColumnIndexStep0010: int = -1
+    iPreTaxProfitColumnIndexStep0010: int = -1
+    if objStep0010Rows:
+        objHeaderRow = objStep0010Rows[0]
+        for iColumnIndex, pszColumnName in enumerate(objHeaderRow):
+            if pszColumnName == "法人税、住民税及び事業税":
+                iCorporateTaxColumnIndexStep0010 = iColumnIndex
+            elif pszColumnName == "法人税等":
+                iCorporateTaxTotalColumnIndexStep0010 = iColumnIndex
+            elif pszColumnName == "税引前当期純利益":
+                iPreTaxProfitColumnIndexStep0010 = iColumnIndex
+            elif pszColumnName == "当期純利益":
+                iNetProfitColumnIndexStep0010 = iColumnIndex
+
+    if (
+        iCorporateTaxColumnIndexStep0010 >= 0
+        and iCorporateTaxTotalColumnIndexStep0010 >= 0
+        and iPreTaxProfitColumnIndexStep0010 >= 0
+        and iNetProfitColumnIndexStep0010 >= 0
+    ):
+        recalculate_net_profit(
+            objStep0010Rows,
+            iCorporateTaxColumnIndexStep0010,
+            iCorporateTaxTotalColumnIndexStep0010,
+            iPreTaxProfitColumnIndexStep0010,
+            iNetProfitColumnIndexStep0010,
+        )
+
+    with open(pszOutputStep0010Path, "w", encoding="utf-8", newline="") as objOutputFile:
+        for objRow in objStep0010Rows:
+            objOutputFile.write("\t".join(objRow) + "\n")
+
+    write_transposed_tsv(pszOutputStep0010Path)
+    pszOutputStep0010HorizontalPath: str = pszOutputStep0010Path.replace("_vertical", "")
+    move_files_to_temp_and_copy_back(
+        [pszOutputStep0010Path, pszOutputStep0010HorizontalPath],
+        os.getcwd(),
+    )
+
     with open(pszOutputFinalPath, "w", encoding="utf-8", newline="") as objOutputFile:
         for objRow in objRows:
             objOutputFile.write("\t".join(objRow) + "\n")
@@ -1001,6 +1045,37 @@ def write_transposed_tsv(pszInputPath: str) -> None:
     with open(pszOutputPath, "w", encoding="utf-8", newline="") as objOutputFile:
         for objRow in objTransposed:
             objOutputFile.write("\t".join(objRow) + "\n")
+
+
+def move_files_to_temp(objFilePaths: List[str], pszBaseDirectory: str) -> None:
+    if not objFilePaths:
+        return
+
+    pszTempDirectory: str = os.path.join(pszBaseDirectory, "temp")
+    os.makedirs(pszTempDirectory, exist_ok=True)
+
+    for pszFilePath in objFilePaths:
+        if not os.path.isfile(pszFilePath):
+            continue
+        pszFileName: str = os.path.basename(pszFilePath)
+        pszTempPath: str = os.path.join(pszTempDirectory, pszFileName)
+        shutil.move(pszFilePath, pszTempPath)
+
+
+def move_files_to_temp_and_copy_back(objFilePaths: List[str], pszBaseDirectory: str) -> None:
+    if not objFilePaths:
+        return
+
+    pszTempDirectory: str = os.path.join(pszBaseDirectory, "temp")
+    os.makedirs(pszTempDirectory, exist_ok=True)
+
+    for pszFilePath in objFilePaths:
+        if not os.path.isfile(pszFilePath):
+            continue
+        pszFileName: str = os.path.basename(pszFilePath)
+        pszTempPath: str = os.path.join(pszTempDirectory, pszFileName)
+        shutil.move(pszFilePath, pszTempPath)
+        shutil.copy2(pszTempPath, os.path.join(pszBaseDirectory, pszFileName))
 
 
 def find_selected_range_path(pszBaseDirectory: str) -> Optional[str]:
@@ -1167,6 +1242,60 @@ def write_tsv_rows(pszPath: str, objRows: List[List[str]]) -> None:
             objFile.write("\t".join(objRow) + "\n")
 
 
+g_pszSelectedRangePath: Optional[str] = None
+
+
+def ensure_selected_range_file(pszBaseDirectory: str) -> str:
+    pszFileName: str = "SellGeneralAdminCost_Allocation_DnD_SelectedRange.txt"
+    pszCandidate: str = os.path.join(pszBaseDirectory, pszFileName)
+    pszContent: str = """採用範囲: 2025年4月〜2025年10月
+
+//
+// 単月_財務諸表
+//
+
+8月決算の場合
+(2025年08月が前会計期間の末月だから。)
+損益計算書_販管費配賦_step0010_2025年08月_A∪B_プロジェクト名_C∪D.tsv
+
+(2025年10月が当会計期間内で一番最新だから。)
+損益計算書_販管費配賦_step0010_2025年10月_A∪B_プロジェクト名_C∪D.tsv
+
+3月決算の場合
+(2025年10月が当会計期間内で一番最新だから。)
+損益計算書_販管費配賦_step0010_2025年10月_A∪B_プロジェクト名_C∪D.tsv
+(2026年03月が当会計期間の末月だから。)
+なし。←期日未到来だから。
+
+//
+// 累計_財務諸表
+//
+
+8月決算の場合
+累計_製造原価報告書_2025年04月_2025年08月.tsv
+累計_製造原価報告書_2025年04月_2025年08月_vertical.tsv
+累計_製造原価報告書_2025年09月_2025年10月.tsv
+累計_製造原価報告書_2025年09月_2025年10月_vertical.tsv
+累計_損益計算書_2025年04月_2025年08月.tsv
+累計_損益計算書_2025年04月_2025年08月_vertical.tsv
+累計_損益計算書_2025年09月_2025年10月.tsv
+累計_損益計算書_2025年09月_2025年10月_vertical.tsv
+
+3月決算の場合
+累計_製造原価報告書_2025年04月_2025年10月.tsv
+累計_製造原価報告書_2025年04月_2025年10月_vertical.tsv
+累計_損益計算書_2025年04月_2025年10月.tsv
+累計_損益計算書_2025年04月_2025年10月_vertical.tsv
+"""
+    with open(pszCandidate, "w", encoding="utf-8", newline="") as objFile:
+        objFile.write(pszContent)
+    return pszCandidate
+
+
+def record_created_file(pszPath: str) -> None:
+    return
+
+
 def append_gross_margin_column(objRows: List[List[str]]) -> List[List[str]]:
     if not objRows:
         return []
@@ -1200,6 +1329,60 @@ def append_gross_margin_column(objRows: List[List[str]]) -> List[List[str]]:
             objNewRow.append(format_number(fGrossProfit / fSales))
 
         objOutputRows.append(objNewRow)
+    return objOutputRows
+
+
+def collapse_company_sg_admin_cost_columns(objRows: List[List[str]]) -> List[List[str]]:
+    if not objRows:
+        return []
+
+    objTargetColumns: List[str] = [
+        "1Cカンパニー販管費",
+        "2Cカンパニー販管費",
+        "3Cカンパニー販管費",
+        "4Cカンパニー販管費",
+        "事業開発カンパニー販管費",
+    ]
+    objHeader: List[str] = objRows[0]
+    objTargetIndices: List[int] = [find_column_index(objHeader, pszColumn) for pszColumn in objTargetColumns]
+    objValidIndices: List[int] = [iIndex for iIndex in objTargetIndices if iIndex >= 0]
+    if not objValidIndices:
+        return objRows
+
+    iInsertIndex: int = min(objValidIndices)
+    objOutputRows: List[List[str]] = []
+
+    objNewHeader: List[str] = []
+    bInsertedHeader: bool = False
+    for iColumnIndex, pszValue in enumerate(objHeader):
+        if iColumnIndex in objValidIndices:
+            if not bInsertedHeader:
+                objNewHeader.append("カンパニー販管費")
+                bInsertedHeader = True
+            continue
+        objNewHeader.append(pszValue)
+    objOutputRows.append(objNewHeader)
+
+    for objRow in objRows[1:]:
+        fSum: float = 0.0
+        for iColumnIndex in objValidIndices:
+            if 0 <= iColumnIndex < len(objRow):
+                fSum += parse_number(objRow[iColumnIndex])
+
+        objNewRow: List[str] = []
+        bInserted: bool = False
+        for iColumnIndex, pszValue in enumerate(objRow):
+            if iColumnIndex in objValidIndices:
+                if not bInserted:
+                    objNewRow.append(format_number(fSum))
+                    bInserted = True
+                continue
+            objNewRow.append(pszValue)
+
+        if not bInserted:
+            objNewRow.insert(iInsertIndex, format_number(fSum))
+        objOutputRows.append(objNewRow)
+
     return objOutputRows
 
 
@@ -1671,6 +1854,11 @@ def create_pj_summary(
         "売上原価",
         "売上総利益",
         "配賦販管費",
+        "1Cカンパニー販管費",
+        "2Cカンパニー販管費",
+        "3Cカンパニー販管費",
+        "4Cカンパニー販管費",
+        "事業開発カンパニー販管費",
     ]
     objSingleStep0002Rows: List[List[str]] = filter_rows_by_columns(
         objSingleOutputRows,
@@ -1691,9 +1879,26 @@ def create_pj_summary(
     write_tsv_rows(pszSingleStep0002Path, objSingleStep0002Rows)
     write_tsv_rows(pszCumulativeStep0002Path, objCumulativeStep0002Rows)
 
-    objSingleStep0003Rows: List[List[str]] = append_gross_margin_column(objSingleStep0002Rows)
-    objCumulativeStep0003Rows: List[List[str]] = append_gross_margin_column(
+    objSingleStep0003CollapsedRows: List[List[str]] = collapse_company_sg_admin_cost_columns(
+        objSingleStep0002Rows
+    )
+    objCumulativeStep0003CollapsedRows: List[List[str]] = collapse_company_sg_admin_cost_columns(
         objCumulativeStep0002Rows
+    )
+    pszSingleStep0003CollapsedPath: str = os.path.join(
+        pszDirectory,
+        "0001_PJサマリ_step0003_単月_損益計算書.tsv",
+    )
+    pszCumulativeStep0003CollapsedPath: str = os.path.join(
+        pszDirectory,
+        "0001_PJサマリ_step0003_累計_損益計算書.tsv",
+    )
+    write_tsv_rows(pszSingleStep0003CollapsedPath, objSingleStep0003CollapsedRows)
+    write_tsv_rows(pszCumulativeStep0003CollapsedPath, objCumulativeStep0003CollapsedRows)
+
+    objSingleStep0003Rows: List[List[str]] = append_gross_margin_column(objSingleStep0003CollapsedRows)
+    objCumulativeStep0003Rows: List[List[str]] = append_gross_margin_column(
+        objCumulativeStep0003CollapsedRows
     )
     pszSingleStep0003Path: str = os.path.join(
         pszDirectory,
@@ -2092,6 +2297,13 @@ def main(argv: list[str]) -> int:
         print_usage()
         return 1
 
+    global g_pszSelectedRangePath
+    pszBaseDirectory: str = os.getcwd()
+    pszRangePath: Optional[str] = find_selected_range_path(pszBaseDirectory)
+    if pszRangePath is None:
+        pszRangePath = ensure_selected_range_file(pszBaseDirectory)
+    g_pszSelectedRangePath = pszRangePath
+
     objCsvInputs: List[str] = [pszPath for pszPath in argv[1:] if pszPath.lower().endswith(".csv")]
     objTsvInputs: List[str] = [pszPath for pszPath in argv[1:] if pszPath.lower().endswith(".tsv")]
 
@@ -2176,6 +2388,7 @@ def main(argv: list[str]) -> int:
         pszOutputStep0009Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0009_")
         pszOutputStep0005Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0005_")
         pszOutputStep0006Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0006_")
+        pszOutputStep0010Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0010_")
 
         if not os.path.exists(pszManhourPath):
             print(f"Input file not found: {pszManhourPath}")
@@ -2197,6 +2410,7 @@ def main(argv: list[str]) -> int:
             pszOutputStep0009Path,
             pszOutputStep0005Path,
             pszOutputStep0006Path,
+            pszOutputStep0010Path,
             pszOutputFinalPath,
             objManhourMap,
             objCompanyMap,
@@ -2210,6 +2424,7 @@ def main(argv: list[str]) -> int:
         print(f"Output: {pszOutputStep0009Path}")
         print(f"Output: {pszOutputStep0005Path}")
         print(f"Output: {pszOutputStep0006Path}")
+        print(f"Output: {pszOutputStep0010Path}")
         print(f"Output: {pszOutputFinalPath}")
 
     if objPairs:
