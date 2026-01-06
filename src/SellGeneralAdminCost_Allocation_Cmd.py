@@ -1266,6 +1266,60 @@ def record_created_file(pszPath: str) -> None:
         return
 
 
+g_pszSelectedRangePath: Optional[str] = None
+
+
+def ensure_selected_range_file(pszBaseDirectory: str) -> str:
+    pszFileName: str = "SellGeneralAdminCost_Allocation_DnD_SelectedRange.txt"
+    pszCandidate: str = os.path.join(pszBaseDirectory, pszFileName)
+    pszContent: str = """採用範囲: 2025年4月〜2025年10月
+
+//
+// 単月_財務諸表
+//
+
+8月決算の場合
+(2025年08月が前会計期間の末月だから。)
+損益計算書_販管費配賦_step0010_2025年08月_A∪B_プロジェクト名_C∪D.tsv
+
+(2025年10月が当会計期間内で一番最新だから。)
+損益計算書_販管費配賦_step0010_2025年10月_A∪B_プロジェクト名_C∪D.tsv
+
+3月決算の場合
+(2025年10月が当会計期間内で一番最新だから。)
+損益計算書_販管費配賦_step0010_2025年10月_A∪B_プロジェクト名_C∪D.tsv
+(2026年03月が当会計期間の末月だから。)
+なし。←期日未到来だから。
+
+//
+// 累計_財務諸表
+//
+
+8月決算の場合
+累計_製造原価報告書_2025年04月_2025年08月.tsv
+累計_製造原価報告書_2025年04月_2025年08月_vertical.tsv
+累計_製造原価報告書_2025年09月_2025年10月.tsv
+累計_製造原価報告書_2025年09月_2025年10月_vertical.tsv
+累計_損益計算書_2025年04月_2025年08月.tsv
+累計_損益計算書_2025年04月_2025年08月_vertical.tsv
+累計_損益計算書_2025年09月_2025年10月.tsv
+累計_損益計算書_2025年09月_2025年10月_vertical.tsv
+
+3月決算の場合
+累計_製造原価報告書_2025年04月_2025年10月.tsv
+累計_製造原価報告書_2025年04月_2025年10月_vertical.tsv
+累計_損益計算書_2025年04月_2025年10月.tsv
+累計_損益計算書_2025年04月_2025年10月_vertical.tsv
+"""
+    with open(pszCandidate, "w", encoding="utf-8", newline="") as objFile:
+        objFile.write(pszContent)
+    return pszCandidate
+
+
+def record_created_file(pszPath: str) -> None:
+    return
+
+
 def append_gross_margin_column(objRows: List[List[str]]) -> List[List[str]]:
     if not objRows:
         return []
