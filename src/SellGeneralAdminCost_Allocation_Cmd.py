@@ -1240,6 +1240,30 @@ def write_tsv_rows(pszPath: str, objRows: List[List[str]]) -> None:
     with open(pszPath, "w", encoding="utf-8", newline="") as objFile:
         for objRow in objRows:
             objFile.write("\t".join(objRow) + "\n")
+    record_created_file(pszPath)
+
+
+g_pszSelectedRangePath: Optional[str] = None
+
+
+def ensure_selected_range_file(pszBaseDirectory: str) -> str:
+    pszFileName: str = "SellGeneralAdminCost_Allocation_DnD_SelectedRange.txt"
+    pszCandidate: str = os.path.join(pszBaseDirectory, pszFileName)
+    with open(pszCandidate, "w", encoding="utf-8", newline="") as objFile:
+        objFile.write("採用範囲: 2025年4月〜2025年10月\n\n")
+    return pszCandidate
+
+
+def record_created_file(pszPath: str) -> None:
+    if not pszPath:
+        return
+    if g_pszSelectedRangePath is None:
+        return
+    try:
+        with open(g_pszSelectedRangePath, "a", encoding="utf-8", newline="") as objFile:
+            objFile.write(os.path.basename(pszPath) + "\n")
+    except OSError:
+        return
 
 
 def append_gross_margin_column(objRows: List[List[str]]) -> List[List[str]]:
@@ -2242,6 +2266,13 @@ def main(argv: list[str]) -> int:
     if len(argv) < 3:
         print_usage()
         return 1
+
+    global g_pszSelectedRangePath
+    pszBaseDirectory: str = os.getcwd()
+    pszRangePath: Optional[str] = find_selected_range_path(pszBaseDirectory)
+    if pszRangePath is None:
+        pszRangePath = ensure_selected_range_file(pszBaseDirectory)
+    g_pszSelectedRangePath = pszRangePath
 
     objCsvInputs: List[str] = [pszPath for pszPath in argv[1:] if pszPath.lower().endswith(".csv")]
     objTsvInputs: List[str] = [pszPath for pszPath in argv[1:] if pszPath.lower().endswith(".tsv")]
