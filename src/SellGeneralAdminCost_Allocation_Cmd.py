@@ -1244,6 +1244,16 @@ def write_tsv_rows(pszPath: str, objRows: List[List[str]]) -> None:
 
 
 g_pszSelectedRangePath: Optional[str] = None
+<<<<<<< codex/show-specifications-for-step0010-sl9ufs
+g_pszSelectedRangeText: Optional[str] = None
+
+
+def ensure_selected_range_file(pszBaseDirectory: str, pszRangeText: str) -> str:
+    pszFileName: str = "SellGeneralAdminCost_Allocation_DnD_SelectedRange.txt"
+    pszCandidate: str = os.path.join(pszBaseDirectory, pszFileName)
+    with open(pszCandidate, "w", encoding="utf-8", newline="") as objFile:
+        objFile.write(f"採用範囲: {pszRangeText}\n")
+=======
 
 
 def ensure_selected_range_file(pszBaseDirectory: str) -> str:
@@ -1251,6 +1261,7 @@ def ensure_selected_range_file(pszBaseDirectory: str) -> str:
     pszCandidate: str = os.path.join(pszBaseDirectory, pszFileName)
     with open(pszCandidate, "w", encoding="utf-8", newline="") as objFile:
         objFile.write("採用範囲: 2025年4月〜2025年10月\n\n")
+>>>>>>> main
     return pszCandidate
 
 
@@ -1266,6 +1277,58 @@ def record_created_file(pszPath: str) -> None:
         return
 
 
+<<<<<<< codex/show-specifications-for-step0010-sl9ufs
+def extract_year_months_from_paths(objPaths: List[str]) -> List[Tuple[int, int]]:
+    objMatches: List[Tuple[int, int]] = []
+    objPattern = re.compile(r"(20\\d{2})年(\\d{1,2})月")
+    for pszPath in objPaths:
+        objFind = objPattern.findall(pszPath)
+        for pszYear, pszMonth in objFind:
+            try:
+                iYear = int(pszYear)
+                iMonth = int(pszMonth)
+                if 1 <= iMonth <= 12:
+                    objMatches.append((iYear, iMonth))
+            except ValueError:
+                continue
+    return objMatches
+
+
+def build_range_text_from_paths(objPaths: List[str]) -> Optional[str]:
+    objMonths = extract_year_months_from_paths(objPaths)
+    if not objMonths:
+        return None
+    objMonths.sort()
+    iStartYear, iStartMonth = objMonths[0]
+    iEndYear, iEndMonth = objMonths[-1]
+    return f"{iStartYear}年{iStartMonth}月〜{iEndYear}年{iEndMonth}月"
+
+
+def extract_year_months_from_paths(objPaths: List[str]) -> List[Tuple[int, int]]:
+    objMatches: List[Tuple[int, int]] = []
+    objPattern = re.compile(r"(20\d{2})年(\d{1,2})月")
+    for pszPath in objPaths:
+        objFind = objPattern.findall(pszPath)
+        for pszYear, pszMonth in objFind:
+            try:
+                iYear = int(pszYear)
+                iMonth = int(pszMonth)
+                if 1 <= iMonth <= 12:
+                    objMatches.append((iYear, iMonth))
+            except ValueError:
+                continue
+    return objMatches
+
+
+def build_range_text_from_paths(objPaths: List[str]) -> Optional[str]:
+    objMonths = extract_year_months_from_paths(objPaths)
+    if not objMonths:
+        return None
+    objMonths.sort()
+    iStartYear, iStartMonth = objMonths[0]
+    iEndYear, iEndMonth = objMonths[-1]
+    return f"{iStartYear}年{iStartMonth}月〜{iEndYear}年{iEndMonth}月"
+=======
 g_pszSelectedRangePath: Optional[str] = None
 
 
@@ -1318,6 +1381,7 @@ def ensure_selected_range_file(pszBaseDirectory: str) -> str:
 
 def record_created_file(pszPath: str) -> None:
     return
+>>>>>>> main
 
 
 def append_gross_margin_column(objRows: List[List[str]]) -> List[List[str]]:
@@ -2321,11 +2385,23 @@ def main(argv: list[str]) -> int:
         print_usage()
         return 1
 
+<<<<<<< codex/show-specifications-for-step0010-sl9ufs
+    global g_pszSelectedRangePath, g_pszSelectedRangeText
+    pszBaseDirectory: str = os.getcwd()
+    pszRangeText: Optional[str] = build_range_text_from_paths(argv[1:])
+    if pszRangeText is None:
+        pszRangeText = "未設定"
+    g_pszSelectedRangeText = pszRangeText
+    pszRangePath: Optional[str] = find_selected_range_path(pszBaseDirectory)
+    if pszRangePath is None:
+        pszRangePath = ensure_selected_range_file(pszBaseDirectory, pszRangeText)
+=======
     global g_pszSelectedRangePath
     pszBaseDirectory: str = os.getcwd()
     pszRangePath: Optional[str] = find_selected_range_path(pszBaseDirectory)
     if pszRangePath is None:
         pszRangePath = ensure_selected_range_file(pszBaseDirectory)
+>>>>>>> main
     g_pszSelectedRangePath = pszRangePath
 
     objCsvInputs: List[str] = [pszPath for pszPath in argv[1:] if pszPath.lower().endswith(".csv")]
